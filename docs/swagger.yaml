@@ -1,0 +1,1024 @@
+openapi: "3.0.3"
+info:
+  title: BBS Backend API
+  version: "1.0.0"
+  description: API untuk admin panel dan halaman publik BBS Conveyor
+
+servers:
+  - url: http://localhost:8080
+    description: Development
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+
+  schemas:
+    Response:
+      type: object
+      properties:
+        data: {}
+        error:
+          type: string
+          nullable: true
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    Admin:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        slug:
+          type: string
+        label:
+          type: string
+        group:
+          type: string
+          enum: [belt-conveyor, lainnya]
+        sortOrder:
+          type: integer
+
+    UpdateCategoryRequest:
+      type: object
+      required: [label]
+      properties:
+        label:
+          type: string
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        group:
+          type: string
+          enum: [belt-conveyor, lainnya]
+        kategori:
+          type: string
+        category:
+          type: string
+        description:
+          type: string
+        detail:
+          type: string
+        image:
+          type: string
+          nullable: true
+        specs:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProductRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        group:
+          type: string
+        kategori:
+          type: string
+        category:
+          type: string
+        description:
+          type: string
+        detail:
+          type: string
+        image:
+          type: string
+          nullable: true
+        specs:
+          type: object
+
+    Article:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        excerpt:
+          type: string
+        content:
+          type: string
+        image:
+          type: string
+          nullable: true
+        tag:
+          type: string
+        publishedAt:
+          type: string
+          format: date
+        author:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ArticleRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        excerpt:
+          type: string
+        content:
+          type: string
+        image:
+          type: string
+          nullable: true
+        tag:
+          type: string
+        publishedAt:
+          type: string
+          format: date
+        author:
+          type: string
+
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        shortDescription:
+          type: string
+        fullDescription:
+          type: string
+        images:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ServiceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        shortDescription:
+          type: string
+        fullDescription:
+          type: string
+        images:
+          type: array
+          items:
+            type: string
+
+    Gallery:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        image:
+          type: string
+        caption:
+          type: string
+        location:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    GalleryRequest:
+      type: object
+      required: [image]
+      properties:
+        image:
+          type: string
+        caption:
+          type: string
+        location:
+          type: string
+          nullable: true
+
+    Industry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        image:
+          type: string
+          nullable: true
+        productSlugs:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    IndustryRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        image:
+          type: string
+          nullable: true
+        productSlugs:
+          type: array
+          items:
+            type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: string
+          nullable: true
+          example: null
+        error:
+          type: string
+
+paths:
+  # ── Auth ──
+  /api/admin/login:
+    post:
+      tags: [Auth]
+      summary: Login admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login sukses, set cookie token
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                          admin:
+                            $ref: "#/components/schemas/Admin"
+        "401":
+          description: Email atau password salah
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/admin/logout:
+    post:
+      tags: [Auth]
+      summary: Logout admin
+      responses:
+        "200":
+          description: Cookie token dihapus
+
+  /api/admin/me:
+    get:
+      tags: [Auth]
+      summary: Info admin yang sedang login
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Data admin
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/Admin"
+        "401":
+          description: Token tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Kategori ──
+  /api/kategori:
+    get:
+      tags: [Kategori - Publik]
+      summary: List kategori
+      parameters:
+        - name: group
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Daftar kategori
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Category"
+
+  /api/admin/kategori:
+    get:
+      tags: [Kategori - Admin]
+      summary: List kategori (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: group
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Daftar kategori
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Category"
+
+  /api/admin/kategori/{slug}:
+    put:
+      tags: [Kategori - Admin]
+      summary: Update label kategori
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCategoryRequest"
+      responses:
+        "200":
+          description: Kategori diupdate
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/Category"
+
+  # ── Produk ──
+  /api/produk:
+    get:
+      tags: [Produk - Publik]
+      summary: List produk
+      parameters:
+        - name: group
+          in: query
+          schema:
+            type: string
+        - name: kategori
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Daftar produk
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Product"
+
+  /api/produk/{slug}:
+    get:
+      tags: [Produk - Publik]
+      summary: Detail produk by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Detail produk
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/Product"
+        "404":
+          description: Produk tidak ditemukan
+
+  /api/admin/produk:
+    get:
+      tags: [Produk - Admin]
+      summary: List produk (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: group
+          in: query
+          schema:
+            type: string
+        - name: kategori
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Daftar produk
+    post:
+      tags: [Produk - Admin]
+      summary: Create produk
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductRequest"
+      responses:
+        "201":
+          description: Produk dibuat
+        "400":
+          description: Nama wajib diisi
+
+  /api/admin/produk/{id}:
+    get:
+      tags: [Produk - Admin]
+      summary: Detail produk by ID
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Detail produk
+        "404":
+          description: Produk tidak ditemukan
+    put:
+      tags: [Produk - Admin]
+      summary: Update produk
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductRequest"
+      responses:
+        "200":
+          description: Produk diupdate
+    delete:
+      tags: [Produk - Admin]
+      summary: Hapus produk
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Produk dihapus
+
+  # ── Artikel ──
+  /api/artikel:
+    get:
+      tags: [Artikel - Publik]
+      summary: List artikel
+      responses:
+        "200":
+          description: Daftar artikel
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Article"
+
+  /api/artikel/{slug}:
+    get:
+      tags: [Artikel - Publik]
+      summary: Detail artikel by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Detail artikel
+        "404":
+          description: Artikel tidak ditemukan
+
+  /api/admin/artikel:
+    get:
+      tags: [Artikel - Admin]
+      summary: List artikel (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Daftar artikel
+    post:
+      tags: [Artikel - Admin]
+      summary: Create artikel
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArticleRequest"
+      responses:
+        "201":
+          description: Artikel dibuat
+
+  /api/admin/artikel/{id}:
+    get:
+      tags: [Artikel - Admin]
+      summary: Detail artikel by ID
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Detail artikel
+    put:
+      tags: [Artikel - Admin]
+      summary: Update artikel
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArticleRequest"
+      responses:
+        "200":
+          description: Artikel diupdate
+    delete:
+      tags: [Artikel - Admin]
+      summary: Hapus artikel
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Artikel dihapus
+
+  # ── Jasa ──
+  /api/jasa:
+    get:
+      tags: [Jasa - Publik]
+      summary: List jasa
+      responses:
+        "200":
+          description: Daftar jasa
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Service"
+
+  /api/jasa/{slug}:
+    get:
+      tags: [Jasa - Publik]
+      summary: Detail jasa by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Detail jasa
+
+  /api/admin/jasa:
+    get:
+      tags: [Jasa - Admin]
+      summary: List jasa (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Daftar jasa
+    post:
+      tags: [Jasa - Admin]
+      summary: Create jasa
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceRequest"
+      responses:
+        "201":
+          description: Jasa dibuat
+
+  /api/admin/jasa/{id}:
+    get:
+      tags: [Jasa - Admin]
+      summary: Detail jasa by ID
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Detail jasa
+    put:
+      tags: [Jasa - Admin]
+      summary: Update jasa
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceRequest"
+      responses:
+        "200":
+          description: Jasa diupdate
+    delete:
+      tags: [Jasa - Admin]
+      summary: Hapus jasa
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Jasa dihapus
+
+  # ── Galeri ──
+  /api/galeri:
+    get:
+      tags: [Galeri - Publik]
+      summary: List galeri
+      responses:
+        "200":
+          description: Daftar galeri
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Gallery"
+
+  /api/galeri/{id}:
+    get:
+      tags: [Galeri - Publik]
+      summary: Detail galeri
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Detail galeri
+
+  /api/admin/galeri:
+    get:
+      tags: [Galeri - Admin]
+      summary: List galeri (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Daftar galeri
+    post:
+      tags: [Galeri - Admin]
+      summary: Create galeri
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GalleryRequest"
+      responses:
+        "201":
+          description: Galeri dibuat
+
+  /api/admin/galeri/{id}:
+    get:
+      tags: [Galeri - Admin]
+      summary: Detail galeri by ID
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Detail galeri
+    put:
+      tags: [Galeri - Admin]
+      summary: Update galeri
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GalleryRequest"
+      responses:
+        "200":
+          description: Galeri diupdate
+    delete:
+      tags: [Galeri - Admin]
+      summary: Hapus galeri
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Galeri dihapus
+
+  # ── Industri ──
+  /api/industri:
+    get:
+      tags: [Industri - Publik]
+      summary: List industri
+      responses:
+        "200":
+          description: Daftar industri
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Industry"
+
+  /api/industri/{slug}:
+    get:
+      tags: [Industri - Publik]
+      summary: Detail industri by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Detail industri
+
+  /api/admin/industri:
+    get:
+      tags: [Industri - Admin]
+      summary: List industri (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Daftar industri
+    post:
+      tags: [Industri - Admin]
+      summary: Create industri
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IndustryRequest"
+      responses:
+        "201":
+          description: Industri dibuat
+
+  /api/admin/industri/{id}:
+    get:
+      tags: [Industri - Admin]
+      summary: Detail industri by ID
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Detail industri
+    put:
+      tags: [Industri - Admin]
+      summary: Update industri
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IndustryRequest"
+      responses:
+        "200":
+          description: Industri diupdate
+    delete:
+      tags: [Industri - Admin]
+      summary: Hapus industri
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Industri dihapus
+
+  # ── Health ──
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        "200":
+          description: Server OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Response"
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            example: ok

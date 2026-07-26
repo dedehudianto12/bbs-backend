@@ -46,3 +46,37 @@ func (h *Handler) UpdateLabel(w http.ResponseWriter, r *http.Request) {
 	}
 	httphelper.Success(w, http.StatusOK, cat)
 }
+
+type createCategoryRequest struct {
+	Slug  string `json:"slug"`
+	Label string `json:"label"`
+	Group string `json:"group"`
+}
+
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	var req createCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httphelper.Error(w, http.StatusBadRequest, err)
+		return
+	}
+
+	c := &Category{
+		Slug:  req.Slug,
+		Label: req.Label,
+		Group: req.Group,
+	}
+	if err := h.usecase.Create(r.Context(), c); err != nil {
+		httphelper.Error(w, http.StatusInternalServerError, err)
+		return
+	}
+	httphelper.Success(w, http.StatusCreated, c)
+}
+
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if err := h.usecase.Delete(r.Context(), slug); err != nil {
+		httphelper.Error(w, http.StatusInternalServerError, err)
+		return
+	}
+	httphelper.Success(w, http.StatusOK, nil)
+}

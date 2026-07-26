@@ -48,6 +48,10 @@ func Load() (*Config, error){
 
 	sslMode := getEnvOrDefault("SSL_MODE", "disable")
 
+	cloudinaryCloudName := getEnvOrDefault("CLOUDINARY_CLOUD_NAME", "")
+	cloudinaryAPIKey := getEnvOrDefault("CLOUDINARY_API_KEY", "")
+	cloudinaryAPISecret := getEnvOrDefault("CLOUDINARY_API_SECRET", "")
+
 	cfg := &Config{
 		App: AppConfig{
 			Name: appName,
@@ -66,6 +70,11 @@ func Load() (*Config, error){
 		},
 		JWT: JWTConfig{
 			Secret: jwtSecret,
+		},
+		Cloudinary: CloudinaryConfig{
+			CloudName: cloudinaryCloudName,
+			APIKey:    cloudinaryAPIKey,
+			APISecret: cloudinaryAPISecret,
 		},
 	}
 

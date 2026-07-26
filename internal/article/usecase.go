@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/dedehudianto12/bbs-backend/internal/shared/util"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -22,6 +23,10 @@ func NewUsecase(repo Repository) *Usecase {
 
 func (u *Usecase) List(ctx context.Context) ([]Article, error) {
 	return u.repo.FindAll(ctx)
+}
+
+func (u *Usecase) ListAdmin(ctx context.Context, tag, search, sort string, page, limit int) ([]Article, int, error) {
+	return u.repo.FindAllAdmin(ctx, tag, search, sort, page, limit)
 }
 
 func (u *Usecase) GetByID(ctx context.Context, id string) (*Article, error) {
@@ -44,7 +49,7 @@ func (u *Usecase) Create(ctx context.Context, a *Article) error {
 	if a.Title == "" {
 		return ErrTitleRequired
 	}
-	a.Slug = Slugify(a.Title)
+	a.Slug = util.Slugify(a.Title)
 	return u.repo.Create(ctx, a)
 }
 
@@ -56,7 +61,7 @@ func (u *Usecase) Update(ctx context.Context, id string, a *Article) (*Article, 
 
 	if a.Title != "" {
 		existing.Title = a.Title
-		existing.Slug = Slugify(a.Title)
+		existing.Slug = util.Slugify(a.Title)
 	}
 	if a.Excerpt != "" {
 		existing.Excerpt = a.Excerpt

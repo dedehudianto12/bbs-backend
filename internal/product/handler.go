@@ -2,29 +2,23 @@ package product
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/dedehudianto12/bbs-backend/internal/shared/cloudinary"
 	httphelper "github.com/dedehudianto12/bbs-backend/internal/shared/http"
 )
 
+const maxUploadSize = 10 << 20 // 10 MB
+
 type Handler struct {
 	usecase *Usecase
+	cld     *cloudinary.Service
 }
 
-func NewHandler(usecase *Usecase) *Handler {
-	return &Handler{usecase: usecase}
-}
-
-type productRequest struct {
-	Name        string          `json:"name"`
-	Group       string          `json:"group"`
-	Kategori    string          `json:"kategori"`
-	Category    string          `json:"category"`
-	Description string          `json:"description"`
-	Detail      string          `json:"detail"`
-	Image       *string         `json:"image"`
-	Specs       json.RawMessage `json:"specs"`
+func NewHandler(usecase *Usecase, cld *cloudinary.Service) *Handler {
+	return &Handler{usecase: usecase, cld: cld}
 }
 
 // --- Admin ---
@@ -32,13 +26,13 @@ type productRequest struct {
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	group := r.URL.Query().Get("group")
 	kategori := r.URL.Query().Get("kategori")
-
-	products, err := h.usecase.List(r.Context(), group, kategori)
+	page, limit, search, sort := httphelper.ParsePagination(r)
+	products, total, err := h.usecase.ListAdmin(r.Context(), group, kategori, search, sort, page, limit)
 	if err != nil {
 		httphelper.Error(w, http.StatusInternalServerError, err)
 		return
 	}
-	httphelper.Success(w, http.StatusOK, products)
+	httphelper.SuccessPaginated(w, http.StatusOK, products, total, page, limit, sort)
 }
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -55,24 +49,41 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	var req productRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	log.Println("CREATE product handler called")
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		log.Printf("ERROR parse multipart: %v", err)
 		httphelper.Error(w, http.StatusBadRequest, err)
 		return
 	}
+	log.Println("CREATE multipart parsed OK")
 
 	p := &Product{
-		Name:        req.Name,
-		Group:       req.Group,
-		Kategori:    req.Kategori,
-		Category:    req.Category,
-		Description: req.Description,
-		Detail:      req.Detail,
-		Image:       req.Image,
-		Specs:       req.Specs,
+		Name:        r.FormValue("name"),
+		Group:       r.FormValue("group"),
+		Kategori:    r.FormValue("kategori"),
+		Category:    r.FormValue("category"),
+		Description: r.FormValue("description"),
+		Detail:      r.FormValue("detail"),
+	}
+
+	if specs := r.FormValue("specs"); specs != "" {
+		p.Specs = json.RawMessage(specs)
+	}
+
+	file, _, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		url, err := h.cld.Upload(r.Context(), file, "products")
+		if err != nil {
+			log.Printf("WARNING: cloudinary upload failed (product created without image): %v", err)
+		} else {
+			p.Image = &url
+		}
 	}
 
 	if err := h.usecase.Create(r.Context(), p); err != nil {
+		log.Printf("ERROR creating product: %v", err)
 		code := http.StatusInternalServerError
 		if err == ErrNameRequired {
 			code = http.StatusBadRequest
@@ -84,21 +95,34 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	var req productRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
 		httphelper.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
 	p := &Product{
-		Name:        req.Name,
-		Group:       req.Group,
-		Kategori:    req.Kategori,
-		Category:    req.Category,
-		Description: req.Description,
-		Detail:      req.Detail,
-		Image:       req.Image,
-		Specs:       req.Specs,
+		Name:        r.FormValue("name"),
+		Group:       r.FormValue("group"),
+		Kategori:    r.FormValue("kategori"),
+		Category:    r.FormValue("category"),
+		Description: r.FormValue("description"),
+		Detail:      r.FormValue("detail"),
+	}
+
+	if specs := r.FormValue("specs"); specs != "" {
+		p.Specs = json.RawMessage(specs)
+	}
+
+	file, _, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		url, err := h.cld.Upload(r.Context(), file, "products")
+		if err != nil {
+			log.Printf("WARNING: cloudinary upload failed (product updated without image): %v", err)
+		} else {
+			p.Image = &url
+		}
 	}
 
 	updated, err := h.usecase.Update(r.Context(), chi.URLParam(r, "id"), p)
@@ -126,6 +150,18 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Public ---
+
+func (h *Handler) PublicList(w http.ResponseWriter, r *http.Request) {
+	group := r.URL.Query().Get("group")
+	kategori := r.URL.Query().Get("kategori")
+
+	products, err := h.usecase.List(r.Context(), group, kategori)
+	if err != nil {
+		httphelper.Error(w, http.StatusInternalServerError, err)
+		return
+	}
+	httphelper.Success(w, http.StatusOK, products)
+}
 
 func (h *Handler) GetBySlug(w http.ResponseWriter, r *http.Request) {
 	p, err := h.usecase.GetBySlug(r.Context(), chi.URLParam(r, "slug"))

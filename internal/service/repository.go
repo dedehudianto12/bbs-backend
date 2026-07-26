@@ -2,13 +2,14 @@ package service
 
 import (
 	"context"
-	"strings"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository interface {
 	FindAll(ctx context.Context) ([]Service, error)
+	FindAllAdmin(ctx context.Context, search, sort string, page, limit int) ([]Service, int, error)
 	FindByID(ctx context.Context, id string) (*Service, error)
 	FindBySlug(ctx context.Context, slug string) (*Service, error)
 	Create(ctx context.Context, s *Service) error
@@ -42,6 +43,50 @@ func (r *pgxRepo) FindAll(ctx context.Context) ([]Service, error) {
 		services = append(services, s)
 	}
 	return services, nil
+}
+
+func (r *pgxRepo) FindAllAdmin(ctx context.Context, search, sort string, page, limit int) ([]Service, int, error) {
+	var total int
+	countQ := `SELECT count(*) FROM services WHERE 1=1`
+	dataQ := `SELECT id, slug, name, short_description, full_description, images, created_at, updated_at FROM services WHERE 1=1`
+	args := []any{}
+	idx := 1
+
+	if search != "" {
+		cond := fmt.Sprintf(` AND (name ILIKE $%d OR slug ILIKE $%d)`, idx, idx)
+		countQ += cond
+		dataQ += cond
+		args = append(args, "%"+search+"%")
+		idx++
+	}
+
+	if err := r.pool.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	order := "DESC"
+	if sort == "asc" {
+		order = "ASC"
+	}
+	dataQ += fmt.Sprintf(` ORDER BY created_at %s LIMIT $%d OFFSET $%d`, order, idx, idx+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.pool.Query(ctx, dataQ, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var services []Service
+	for rows.Next() {
+		var s Service
+		if err := rows.Scan(&s.ID, &s.Slug, &s.Name, &s.ShortDescription, &s.FullDescription, &s.Images, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		services = append(services, s)
+	}
+	return services, total, nil
 }
 
 func (r *pgxRepo) FindByID(ctx context.Context, id string) (*Service, error) {
@@ -85,14 +130,4 @@ func (r *pgxRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func Slugify(name string) string {
-	s := strings.ToLower(name)
-	s = strings.ReplaceAll(s, " ", "-")
-	var b strings.Builder
-	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
-}
+

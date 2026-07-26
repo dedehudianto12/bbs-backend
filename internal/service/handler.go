@@ -26,12 +26,14 @@ type serviceRequest struct {
 // --- Admin ---
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	services, err := h.usecase.List(r.Context())
+	page, limit, search, sort := httphelper.ParsePagination(r)
+
+	services, total, err := h.usecase.ListAdmin(r.Context(), search, sort, page, limit)
 	if err != nil {
 		httphelper.Error(w, http.StatusInternalServerError, err)
 		return
 	}
-	httphelper.Success(w, http.StatusOK, services)
+	httphelper.SuccessPaginated(w, http.StatusOK, services, total, page, limit, sort)
 }
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +113,15 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Public ---
+
+func (h *Handler) PublicList(w http.ResponseWriter, r *http.Request) {
+	services, err := h.usecase.List(r.Context())
+	if err != nil {
+		httphelper.Error(w, http.StatusInternalServerError, err)
+		return
+	}
+	httphelper.Success(w, http.StatusOK, services)
+}
 
 func (h *Handler) GetBySlug(w http.ResponseWriter, r *http.Request) {
 	s, err := h.usecase.GetBySlug(r.Context(), chi.URLParam(r, "slug"))

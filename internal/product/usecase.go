@@ -3,7 +3,9 @@ package product
 import (
 	"context"
 	"errors"
+	"fmt"
 
+	"github.com/dedehudianto12/bbs-backend/internal/shared/util"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -25,6 +27,10 @@ func (u *Usecase) List(ctx context.Context, group, kategori string) ([]Product, 
 	return u.repo.FindAll(ctx, group, kategori)
 }
 
+func (u *Usecase) ListAdmin(ctx context.Context, group, kategori, search, sort string, page, limit int) ([]Product, int, error) {
+	return u.repo.FindAllAdmin(ctx, group, kategori, search, sort, page, limit)
+}
+
 func (u *Usecase) GetByID(ctx context.Context, id string) (*Product, error) {
 	p, err := u.repo.FindByID(ctx, id)
 	if err != nil {
@@ -42,10 +48,11 @@ func (u *Usecase) GetBySlug(ctx context.Context, slug string) (*Product, error) 
 }
 
 func (u *Usecase) Create(ctx context.Context, p *Product) error {
+	fmt.Println("Creating product:", p)
 	if p.Name == "" {
 		return ErrNameRequired
 	}
-	p.Slug = Slugify(p.Name)
+	p.Slug = util.Slugify(p.Name)
 	return u.repo.Create(ctx, p)
 }
 
@@ -57,7 +64,7 @@ func (u *Usecase) Update(ctx context.Context, id string, p *Product) (*Product, 
 
 	if p.Name != "" {
 		existing.Name = p.Name
-		existing.Slug = Slugify(p.Name)
+		existing.Slug = util.Slugify(p.Name)
 	}
 	if p.Group != "" {
 		existing.Group = p.Group

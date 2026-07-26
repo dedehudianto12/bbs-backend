@@ -2,12 +2,14 @@ package gallery
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository interface {
 	FindAll(ctx context.Context) ([]Gallery, error)
+	FindAllAdmin(ctx context.Context, search, sort string, page, limit int) ([]Gallery, int, error)
 	FindByID(ctx context.Context, id string) (*Gallery, error)
 	Create(ctx context.Context, g *Gallery) error
 	Update(ctx context.Context, g *Gallery) error
@@ -40,6 +42,50 @@ func (r *pgxRepo) FindAll(ctx context.Context) ([]Gallery, error) {
 		galleries = append(galleries, g)
 	}
 	return galleries, nil
+}
+
+func (r *pgxRepo) FindAllAdmin(ctx context.Context, search, sort string, page, limit int) ([]Gallery, int, error) {
+	var total int
+	countQ := `SELECT count(*) FROM galleries WHERE 1=1`
+	dataQ := `SELECT id, image, caption, location, created_at, updated_at FROM galleries WHERE 1=1`
+	args := []any{}
+	idx := 1
+
+	if search != "" {
+		cond := fmt.Sprintf(` AND caption ILIKE $%d`, idx)
+		countQ += cond
+		dataQ += cond
+		args = append(args, "%"+search+"%")
+		idx++
+	}
+
+	if err := r.pool.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	order := "DESC"
+	if sort == "asc" {
+		order = "ASC"
+	}
+	dataQ += fmt.Sprintf(` ORDER BY created_at %s LIMIT $%d OFFSET $%d`, order, idx, idx+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.pool.Query(ctx, dataQ, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var galleries []Gallery
+	for rows.Next() {
+		var g Gallery
+		if err := rows.Scan(&g.ID, &g.Image, &g.Caption, &g.Location, &g.CreatedAt, &g.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		galleries = append(galleries, g)
+	}
+	return galleries, total, nil
 }
 
 func (r *pgxRepo) FindByID(ctx context.Context, id string) (*Gallery, error) {

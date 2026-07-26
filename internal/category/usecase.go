@@ -26,8 +26,6 @@ func (u *Usecase) UpdateLabel(ctx context.Context, slug, label string) (*Categor
 	if err != nil {
 		return nil, err
 	}
-
-	// Ambil data terbaru — karena hanya update label, return single category
 	cats, err := u.repo.FindAll(ctx, "")
 	if err != nil {
 		return nil, err
@@ -38,4 +36,12 @@ func (u *Usecase) UpdateLabel(ctx context.Context, slug, label string) (*Categor
 		}
 	}
 	return nil, ErrNotFound
+}
+
+func (u *Usecase) Create(ctx context.Context, c *Category) error {
+	return u.repo.Create(ctx, c)
+}
+
+func (u *Usecase) Delete(ctx context.Context, slug string) error {
+	return u.repo.Delete(ctx, slug)
 }

@@ -2,12 +2,16 @@ module github.com/dedehudianto12/bbs-backend
 
 go 1.25.5
 
+require github.com/go-chi/chi v1.5.5
+
 require (
-	github.com/go-chi/chi v1.5.5
+	github.com/cloudinary/cloudinary-go/v2 v2.16.0 // indirect
+	github.com/creasty/defaults v1.7.0 // indirect
 	github.com/go-chi/chi/v5 v5.3.1 // indirect
 	github.com/go-chi/cors v1.2.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/schema v1.4.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.10.0 // indirect

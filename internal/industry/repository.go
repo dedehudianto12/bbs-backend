@@ -2,7 +2,7 @@ package industry
 
 import (
 	"context"
-	"strings"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -11,6 +11,7 @@ import (
 
 type Repository interface {
 	FindAll(ctx context.Context) ([]Industry, error)
+	FindAllAdmin(ctx context.Context, search, sort string, page, limit int) ([]Industry, int, error)
 	FindByID(ctx context.Context, id string) (*Industry, error)
 	FindBySlug(ctx context.Context, slug string) (*Industry, error)
 	Create(ctx context.Context, i *Industry) error
@@ -44,13 +45,64 @@ func (r *pgxRepo) FindAll(ctx context.Context) ([]Industry, error) {
 		industries = append(industries, i)
 	}
 
-	// Load product slugs untuk semua industries
+	// ponytail: batch fetch product slugs instead of N+1 per-industry queries
+	slugMap, _ := r.batchGetProductSlugs(ctx, industryIDs(industries))
 	for idx := range industries {
-		slugs, _ := r.getProductSlugs(ctx, industries[idx].ID)
-		industries[idx].ProductSlugs = slugs
+		industries[idx].ProductSlugs = slugMap[industries[idx].ID]
 	}
 
 	return industries, nil
+}
+
+func (r *pgxRepo) FindAllAdmin(ctx context.Context, search, sort string, page, limit int) ([]Industry, int, error) {
+	var total int
+	countQ := `SELECT count(*) FROM industries WHERE 1=1`
+	dataQ := `SELECT id, slug, name, description, image, created_at, updated_at FROM industries WHERE 1=1`
+	args := []any{}
+	idx := 1
+
+	if search != "" {
+		cond := fmt.Sprintf(` AND (name ILIKE $%d OR slug ILIKE $%d)`, idx, idx)
+		countQ += cond
+		dataQ += cond
+		args = append(args, "%"+search+"%")
+		idx++
+	}
+
+	if err := r.pool.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	order := "DESC"
+	if sort == "asc" {
+		order = "ASC"
+	}
+	dataQ += fmt.Sprintf(` ORDER BY created_at %s LIMIT $%d OFFSET $%d`, order, idx, idx+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.pool.Query(ctx, dataQ, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var industries []Industry
+	for rows.Next() {
+		var i Industry
+		if err := rows.Scan(&i.ID, &i.Slug, &i.Name, &i.Description, &i.Image, &i.CreatedAt, &i.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		industries = append(industries, i)
+	}
+
+	// ponytail: batch fetch product slugs instead of N+1 per-industry queries
+	slugMap, _ := r.batchGetProductSlugs(ctx, industryIDs(industries))
+	for idx := range industries {
+		industries[idx].ProductSlugs = slugMap[industries[idx].ID]
+	}
+
+	return industries, total, nil
 }
 
 func (r *pgxRepo) FindByID(ctx context.Context, id string) (*Industry, error) {
@@ -128,6 +180,14 @@ func (r *pgxRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
+func industryIDs(industries []Industry) []uuid.UUID {
+	ids := make([]uuid.UUID, len(industries))
+	for i, ind := range industries {
+		ids[i] = ind.ID
+	}
+	return ids
+}
+
 func (r *pgxRepo) getProductSlugs(ctx context.Context, industryID uuid.UUID) ([]string, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT product_slug FROM industry_products WHERE industry_id = $1 ORDER BY product_slug`, industryID,
@@ -148,6 +208,32 @@ func (r *pgxRepo) getProductSlugs(ctx context.Context, industryID uuid.UUID) ([]
 	return slugs, nil
 }
 
+// batchGetProductSlugs fetches product slugs for multiple industry IDs in one query.
+func (r *pgxRepo) batchGetProductSlugs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID][]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT industry_id, product_slug FROM industry_products WHERE industry_id = ANY($1) ORDER BY product_slug`,
+		ids,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	m := make(map[uuid.UUID][]string)
+	for rows.Next() {
+		var industryID uuid.UUID
+		var slug string
+		if err := rows.Scan(&industryID, &slug); err != nil {
+			return nil, err
+		}
+		m[industryID] = append(m[industryID], slug)
+	}
+	return m, rows.Err()
+}
+
 func (r *pgxRepo) syncProductSlugs(ctx context.Context, tx pgx.Tx, industryID uuid.UUID, slugs []string) error {
 	_, err := tx.Exec(ctx, `DELETE FROM industry_products WHERE industry_id = $1`, industryID)
 	if err != nil {
@@ -166,14 +252,4 @@ func (r *pgxRepo) syncProductSlugs(ctx context.Context, tx pgx.Tx, industryID uu
 	return nil
 }
 
-func Slugify(name string) string {
-	s := strings.ToLower(name)
-	s = strings.ReplaceAll(s, " ", "-")
-	var b strings.Builder
-	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
-}
+

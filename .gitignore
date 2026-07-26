@@ -1,0 +1,24 @@
+# Binary
+/bbs-backend
+/bin/
+/dist/
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+
+# Uploads / temp
+/tmp/
+/uploads/

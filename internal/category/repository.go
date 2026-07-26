@@ -9,6 +9,8 @@ import (
 type Repository interface {
 	FindAll(ctx context.Context, group string) ([]Category, error)
 	UpdateLabel(ctx context.Context, slug, label string) error
+	Create(ctx context.Context, c *Category) error
+	Delete(ctx context.Context, slug string) error
 }
 
 type pgxRepo struct {
@@ -51,5 +53,18 @@ func (r *pgxRepo) UpdateLabel(ctx context.Context, slug, label string) error {
 		`UPDATE categories SET label = $1 WHERE slug = $2`,
 		label, slug,
 	)
+	return err
+}
+
+func (r *pgxRepo) Create(ctx context.Context, c *Category) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO categories (slug, label, "group", sort_order) VALUES ($1,$2,$3,$4)`,
+		c.Slug, c.Label, c.Group, c.SortOrder,
+	)
+	return err
+}
+
+func (r *pgxRepo) Delete(ctx context.Context, slug string) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM categories WHERE slug = $1`, slug)
 	return err
 }

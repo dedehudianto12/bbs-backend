@@ -1,40 +1,37 @@
 package article
 
 import (
-	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/dedehudianto12/bbs-backend/internal/shared/cloudinary"
 	httphelper "github.com/dedehudianto12/bbs-backend/internal/shared/http"
 )
 
+const maxUploadSize = 10 << 20 // 10 MB
+
 type Handler struct {
 	usecase *Usecase
+	cld     *cloudinary.Service
 }
 
-func NewHandler(usecase *Usecase) *Handler {
-	return &Handler{usecase: usecase}
-}
-
-type articleRequest struct {
-	Title       string  `json:"title"`
-	Excerpt     string  `json:"excerpt"`
-	Content     string  `json:"content"`
-	Image       *string `json:"image"`
-	Tag         string  `json:"tag"`
-	PublishedAt string  `json:"publishedAt"`
-	Author      string  `json:"author"`
+func NewHandler(usecase *Usecase, cld *cloudinary.Service) *Handler {
+	return &Handler{usecase: usecase, cld: cld}
 }
 
 // --- Admin ---
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	articles, err := h.usecase.List(r.Context())
+	page, limit, search, sort := httphelper.ParsePagination(r)
+	tag := r.URL.Query().Get("tag")
+
+	articles, total, err := h.usecase.ListAdmin(r.Context(), tag, search, sort, page, limit)
 	if err != nil {
 		httphelper.Error(w, http.StatusInternalServerError, err)
 		return
 	}
-	httphelper.Success(w, http.StatusOK, articles)
+	httphelper.SuccessPaginated(w, http.StatusOK, articles, total, page, limit, sort)
 }
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -51,20 +48,30 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	var req articleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
 		httphelper.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
 	a := &Article{
-		Title:       req.Title,
-		Excerpt:     req.Excerpt,
-		Content:     req.Content,
-		Image:       req.Image,
-		Tag:         req.Tag,
-		PublishedAt: req.PublishedAt,
-		Author:      req.Author,
+		Title:       r.FormValue("title"),
+		Excerpt:     r.FormValue("excerpt"),
+		Content:     r.FormValue("content"),
+		Tag:         r.FormValue("tag"),
+		PublishedAt: r.FormValue("publishedAt"),
+		Author:      r.FormValue("author"),
+	}
+
+	file, _, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		url, err := h.cld.Upload(r.Context(), file, "articles")
+		if err != nil {
+			log.Printf("WARNING: cloudinary upload failed (article created without image): %v", err)
+		} else {
+			a.Image = &url
+		}
 	}
 
 	if err := h.usecase.Create(r.Context(), a); err != nil {
@@ -79,20 +86,30 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	var req articleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
 		httphelper.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
 	a := &Article{
-		Title:       req.Title,
-		Excerpt:     req.Excerpt,
-		Content:     req.Content,
-		Image:       req.Image,
-		Tag:         req.Tag,
-		PublishedAt: req.PublishedAt,
-		Author:      req.Author,
+		Title:       r.FormValue("title"),
+		Excerpt:     r.FormValue("excerpt"),
+		Content:     r.FormValue("content"),
+		Tag:         r.FormValue("tag"),
+		PublishedAt: r.FormValue("publishedAt"),
+		Author:      r.FormValue("author"),
+	}
+
+	file, _, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		url, err := h.cld.Upload(r.Context(), file, "articles")
+		if err != nil {
+			log.Printf("WARNING: cloudinary upload failed (article updated without image): %v", err)
+		} else {
+			a.Image = &url
+		}
 	}
 
 	updated, err := h.usecase.Update(r.Context(), chi.URLParam(r, "id"), a)
@@ -120,6 +137,15 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Public ---
+
+func (h *Handler) PublicList(w http.ResponseWriter, r *http.Request) {
+	articles, err := h.usecase.List(r.Context())
+	if err != nil {
+		httphelper.Error(w, http.StatusInternalServerError, err)
+		return
+	}
+	httphelper.Success(w, http.StatusOK, articles)
+}
 
 func (h *Handler) GetBySlug(w http.ResponseWriter, r *http.Request) {
 	a, err := h.usecase.GetBySlug(r.Context(), chi.URLParam(r, "slug"))

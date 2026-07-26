@@ -1,36 +1,36 @@
 package gallery
 
 import (
-	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/dedehudianto12/bbs-backend/internal/shared/cloudinary"
 	httphelper "github.com/dedehudianto12/bbs-backend/internal/shared/http"
 )
 
+const maxUploadSize = 10 << 20 // 10 MB
+
 type Handler struct {
 	usecase *Usecase
+	cld     *cloudinary.Service
 }
 
-func NewHandler(usecase *Usecase) *Handler {
-	return &Handler{usecase: usecase}
-}
-
-type galleryRequest struct {
-	Image    string  `json:"image"`
-	Caption  string  `json:"caption"`
-	Location *string `json:"location"`
+func NewHandler(usecase *Usecase, cld *cloudinary.Service) *Handler {
+	return &Handler{usecase: usecase, cld: cld}
 }
 
 // --- Admin ---
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	galleries, err := h.usecase.List(r.Context())
+	page, limit, search, sort := httphelper.ParsePagination(r)
+
+	galleries, total, err := h.usecase.ListAdmin(r.Context(), search, sort, page, limit)
 	if err != nil {
 		httphelper.Error(w, http.StatusInternalServerError, err)
 		return
 	}
-	httphelper.Success(w, http.StatusOK, galleries)
+	httphelper.SuccessPaginated(w, http.StatusOK, galleries, total, page, limit, sort)
 }
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -47,16 +47,29 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	var req galleryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
 		httphelper.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
 	g := &Gallery{
-		Image:    req.Image,
-		Caption:  req.Caption,
-		Location: req.Location,
+		Caption: r.FormValue("caption"),
+	}
+
+	if loc := r.FormValue("location"); loc != "" {
+		g.Location = &loc
+	}
+
+	file, _, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		url, err := h.cld.Upload(r.Context(), file, "galeri")
+		if err != nil {
+			log.Printf("WARNING: cloudinary upload failed (gallery created without image): %v", err)
+		} else {
+			g.Image = url
+		}
 	}
 
 	if err := h.usecase.Create(r.Context(), g); err != nil {
@@ -71,16 +84,29 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	var req galleryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
 		httphelper.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
 	g := &Gallery{
-		Image:    req.Image,
-		Caption:  req.Caption,
-		Location: req.Location,
+		Caption: r.FormValue("caption"),
+	}
+
+	if loc := r.FormValue("location"); loc != "" {
+		g.Location = &loc
+	}
+
+	file, _, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		url, err := h.cld.Upload(r.Context(), file, "galeri")
+		if err != nil {
+			log.Printf("WARNING: cloudinary upload failed (gallery updated without image): %v", err)
+		} else {
+			g.Image = url
+		}
 	}
 
 	updated, err := h.usecase.Update(r.Context(), chi.URLParam(r, "id"), g)

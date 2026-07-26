@@ -2,13 +2,14 @@ package article
 
 import (
 	"context"
-	"strings"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository interface {
 	FindAll(ctx context.Context) ([]Article, error)
+	FindAllAdmin(ctx context.Context, tag, search, sort string, page, limit int) ([]Article, int, error)
 	FindByID(ctx context.Context, id string) (*Article, error)
 	FindBySlug(ctx context.Context, slug string) (*Article, error)
 	Create(ctx context.Context, a *Article) error
@@ -26,7 +27,7 @@ func NewRepository(pool *pgxpool.Pool) Repository {
 
 func (r *pgxRepo) FindAll(ctx context.Context) ([]Article, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, slug, title, excerpt, content, image, tag, published_at, author, created_at, updated_at FROM articles ORDER BY published_at DESC`,
+		`SELECT id, slug, title, excerpt, content, image, tag, published_at::text, author, created_at, updated_at FROM articles ORDER BY published_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -41,13 +42,68 @@ func (r *pgxRepo) FindAll(ctx context.Context) ([]Article, error) {
 		}
 		articles = append(articles, a)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return articles, nil
+}
+
+func (r *pgxRepo) FindAllAdmin(ctx context.Context, tag, search, sort string, page, limit int) ([]Article, int, error) {
+	var total int
+	countQ := `SELECT count(*) FROM articles WHERE 1=1`
+	dataQ := `SELECT id, slug, title, excerpt, content, image, tag, published_at::text, author, created_at, updated_at FROM articles WHERE 1=1`
+	args := []any{}
+	idx := 1
+
+	if search != "" {
+		cond := fmt.Sprintf(` AND (title ILIKE $%d OR slug ILIKE $%d)`, idx, idx)
+		countQ += cond
+		dataQ += cond
+		args = append(args, "%"+search+"%")
+		idx++
+	}
+
+	if tag != "" {
+		cond := fmt.Sprintf(` AND tag = $%d`, idx)
+		countQ += cond
+		dataQ += cond
+		args = append(args, tag)
+		idx++
+	}
+
+	if err := r.pool.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	order := "DESC"
+	if sort == "asc" {
+		order = "ASC"
+	}
+	dataQ += fmt.Sprintf(` ORDER BY published_at %s LIMIT $%d OFFSET $%d`, order, idx, idx+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.pool.Query(ctx, dataQ, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var articles []Article
+	for rows.Next() {
+		var a Article
+		if err := rows.Scan(&a.ID, &a.Slug, &a.Title, &a.Excerpt, &a.Content, &a.Image, &a.Tag, &a.PublishedAt, &a.Author, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		articles = append(articles, a)
+	}
+	return articles, total, nil
 }
 
 func (r *pgxRepo) FindByID(ctx context.Context, id string) (*Article, error) {
 	var a Article
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, slug, title, excerpt, content, image, tag, published_at, author, created_at, updated_at FROM articles WHERE id = $1`, id,
+		`SELECT id, slug, title, excerpt, content, image, tag, published_at::text, author, created_at, updated_at FROM articles WHERE id = $1`, id,
 	).Scan(&a.ID, &a.Slug, &a.Title, &a.Excerpt, &a.Content, &a.Image, &a.Tag, &a.PublishedAt, &a.Author, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -58,7 +114,7 @@ func (r *pgxRepo) FindByID(ctx context.Context, id string) (*Article, error) {
 func (r *pgxRepo) FindBySlug(ctx context.Context, slug string) (*Article, error) {
 	var a Article
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, slug, title, excerpt, content, image, tag, published_at, author, created_at, updated_at FROM articles WHERE slug = $1`, slug,
+		`SELECT id, slug, title, excerpt, content, image, tag, published_at::text, author, created_at, updated_at FROM articles WHERE slug = $1`, slug,
 	).Scan(&a.ID, &a.Slug, &a.Title, &a.Excerpt, &a.Content, &a.Image, &a.Tag, &a.PublishedAt, &a.Author, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -85,14 +141,4 @@ func (r *pgxRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func Slugify(title string) string {
-	s := strings.ToLower(title)
-	s = strings.ReplaceAll(s, " ", "-")
-	var b strings.Builder
-	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
-}
+

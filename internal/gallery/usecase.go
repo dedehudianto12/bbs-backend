@@ -24,6 +24,10 @@ func (u *Usecase) List(ctx context.Context) ([]Gallery, error) {
 	return u.repo.FindAll(ctx)
 }
 
+func (u *Usecase) ListAdmin(ctx context.Context, search, sort string, page, limit int) ([]Gallery, int, error) {
+	return u.repo.FindAllAdmin(ctx, search, sort, page, limit)
+}
+
 func (u *Usecase) GetByID(ctx context.Context, id string) (*Gallery, error) {
 	g, err := u.repo.FindByID(ctx, id)
 	if err != nil {

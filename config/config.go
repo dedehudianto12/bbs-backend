@@ -2,9 +2,10 @@ package config
 
 type Config struct {
 	App AppConfig
-	Server ServerConfig
-	Database DatabaseConfig
-	JWT JWTConfig
+	Server      ServerConfig
+	Database    DatabaseConfig
+	JWT         JWTConfig
+	Cloudinary  CloudinaryConfig
 }
 
 type AppConfig struct{
@@ -27,4 +28,10 @@ type DatabaseConfig struct{
 
 type JWTConfig struct{
 	Secret string
+}
+
+type CloudinaryConfig struct {
+	CloudName string
+	APIKey    string
+	APISecret string
 }

@@ -1,37 +1,37 @@
 package industry
 
 import (
-	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/dedehudianto12/bbs-backend/internal/shared/cloudinary"
 	httphelper "github.com/dedehudianto12/bbs-backend/internal/shared/http"
 )
 
+const maxUploadSize = 10 << 20 // 10 MB
+
 type Handler struct {
 	usecase *Usecase
+	cld     *cloudinary.Service
 }
 
-func NewHandler(usecase *Usecase) *Handler {
-	return &Handler{usecase: usecase}
-}
-
-type industryRequest struct {
-	Name         string   `json:"name"`
-	Description  string   `json:"description"`
-	Image        *string  `json:"image"`
-	ProductSlugs []string `json:"productSlugs"`
+func NewHandler(usecase *Usecase, cld *cloudinary.Service) *Handler {
+	return &Handler{usecase: usecase, cld: cld}
 }
 
 // --- Admin ---
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	industries, err := h.usecase.List(r.Context())
+	page, limit, search, sort := httphelper.ParsePagination(r)
+
+	industries, total, err := h.usecase.ListAdmin(r.Context(), search, sort, page, limit)
 	if err != nil {
 		httphelper.Error(w, http.StatusInternalServerError, err)
 		return
 	}
-	httphelper.Success(w, http.StatusOK, industries)
+	httphelper.SuccessPaginated(w, http.StatusOK, industries, total, page, limit, sort)
 }
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -48,17 +48,33 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	var req industryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
 		httphelper.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
 	ind := &Industry{
-		Name:         req.Name,
-		Description:  req.Description,
-		Image:        req.Image,
-		ProductSlugs: req.ProductSlugs,
+		Name:        r.FormValue("name"),
+		Description: r.FormValue("description"),
+	}
+
+	if slugs := r.FormValue("productSlugs"); slugs != "" {
+		ind.ProductSlugs = strings.Split(slugs, ",")
+		for i := range ind.ProductSlugs {
+			ind.ProductSlugs[i] = strings.TrimSpace(ind.ProductSlugs[i])
+		}
+	}
+
+	file, _, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		url, err := h.cld.Upload(r.Context(), file, "industries")
+		if err != nil {
+			log.Printf("WARNING: cloudinary upload failed (industry created without image): %v", err)
+		} else {
+			ind.Image = &url
+		}
 	}
 
 	if err := h.usecase.Create(r.Context(), ind); err != nil {
@@ -73,17 +89,33 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	var req industryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
 		httphelper.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
 	ind := &Industry{
-		Name:         req.Name,
-		Description:  req.Description,
-		Image:        req.Image,
-		ProductSlugs: req.ProductSlugs,
+		Name:        r.FormValue("name"),
+		Description: r.FormValue("description"),
+	}
+
+	if slugs := r.FormValue("productSlugs"); slugs != "" {
+		ind.ProductSlugs = strings.Split(slugs, ",")
+		for i := range ind.ProductSlugs {
+			ind.ProductSlugs[i] = strings.TrimSpace(ind.ProductSlugs[i])
+		}
+	}
+
+	file, _, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		url, err := h.cld.Upload(r.Context(), file, "industries")
+		if err != nil {
+			log.Printf("WARNING: cloudinary upload failed (industry updated without image): %v", err)
+		} else {
+			ind.Image = &url
+		}
 	}
 
 	updated, err := h.usecase.Update(r.Context(), chi.URLParam(r, "id"), ind)
@@ -111,6 +143,15 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Public ---
+
+func (h *Handler) PublicList(w http.ResponseWriter, r *http.Request) {
+	industries, err := h.usecase.List(r.Context())
+	if err != nil {
+		httphelper.Error(w, http.StatusInternalServerError, err)
+		return
+	}
+	httphelper.Success(w, http.StatusOK, industries)
+}
 
 func (h *Handler) GetBySlug(w http.ResponseWriter, r *http.Request) {
 	ind, err := h.usecase.GetBySlug(r.Context(), chi.URLParam(r, "slug"))

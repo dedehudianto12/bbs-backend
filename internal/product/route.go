@@ -11,6 +11,6 @@ func Routes(r chi.Router, h *Handler) {
 }
 
 func PublicRoutes(r chi.Router, h *Handler) {
-	r.Get("/api/produk", h.List)
+	r.Get("/api/produk", h.PublicList)
 	r.Get("/api/produk/{slug}", h.GetBySlug)
 }

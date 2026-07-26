@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
+	"path/filepath"
 
 	"github.com/dedehudianto12/bbs-backend/config"
 	"github.com/dedehudianto12/bbs-backend/internal/article"
@@ -12,10 +15,38 @@ import (
 	"github.com/dedehudianto12/bbs-backend/internal/industry"
 	"github.com/dedehudianto12/bbs-backend/internal/product"
 	"github.com/dedehudianto12/bbs-backend/internal/service"
+	"github.com/dedehudianto12/bbs-backend/internal/shared/cloudinary"
 	"github.com/dedehudianto12/bbs-backend/internal/shared/database"
 	httpserver "github.com/dedehudianto12/bbs-backend/internal/shared/http"
+	"github.com/dedehudianto12/bbs-backend/internal/swagger"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type statsHandler struct {
+	db *pgxpool.Pool
+}
+
+func (h *statsHandler) Stats(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	stats := make(map[string]int)
+
+	var count int
+	if err := h.db.QueryRow(ctx, `SELECT count(*) FROM products`).Scan(&count); err == nil {
+		stats["products"] = count
+	}
+	if err := h.db.QueryRow(ctx, `SELECT count(*) FROM articles`).Scan(&count); err == nil {
+		stats["articles"] = count
+	}
+	if err := h.db.QueryRow(ctx, `SELECT count(*) FROM services`).Scan(&count); err == nil {
+		stats["services"] = count
+	}
+	if err := h.db.QueryRow(ctx, `SELECT count(*) FROM galleries`).Scan(&count); err == nil {
+		stats["galleries"] = count
+	}
+
+	httpserver.Success(w, http.StatusOK, stats)
+}
 
 func main() {
 	cfg, err := config.Load()
@@ -38,6 +69,12 @@ func main() {
 	authH := auth.NewHandler(authUc)
 	auth.Routes(r, authH) // login & logout: no auth
 
+	// Cloudinary
+	cldSvc, err := cloudinary.New(cfg.Cloudinary.CloudName, cfg.Cloudinary.APIKey, cfg.Cloudinary.APISecret)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Health
 	healthH := health.NewHandler()
 	health.Routes(r, healthH)
@@ -46,19 +83,19 @@ func main() {
 	categoryH := category.NewHandler(category.NewUsecase(category.NewRepository(db)))
 	category.PublicRoutes(r, categoryH)
 
-	productH := product.NewHandler(product.NewUsecase(product.NewRepository(db)))
+	productH := product.NewHandler(product.NewUsecase(product.NewRepository(db)), cldSvc)
 	product.PublicRoutes(r, productH)
 
-	articleH := article.NewHandler(article.NewUsecase(article.NewRepository(db)))
+	articleH := article.NewHandler(article.NewUsecase(article.NewRepository(db)), cldSvc)
 	article.PublicRoutes(r, articleH)
 
 	serviceH := service.NewHandler(service.NewUsecase(service.NewRepository(db)))
 	service.PublicRoutes(r, serviceH)
 
-	galleryH := gallery.NewHandler(gallery.NewUsecase(gallery.NewRepository(db)))
+	galleryH := gallery.NewHandler(gallery.NewUsecase(gallery.NewRepository(db)), cldSvc)
 	gallery.PublicRoutes(r, galleryH)
 
-	industryH := industry.NewHandler(industry.NewUsecase(industry.NewRepository(db)))
+	industryH := industry.NewHandler(industry.NewUsecase(industry.NewRepository(db)), cldSvc)
 	industry.PublicRoutes(r, industryH)
 
 	// Admin routes (protected)
@@ -73,8 +110,22 @@ func main() {
 		industry.Routes(r, industryH)
 	})
 
+	// Swagger docs
+	swaggerHandler := swagger.Handler()
+	yamlPath := filepath.Join("docs", "swagger.yaml")
+	r.Get("/docs/swagger.yaml", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, yamlPath)
+	})
+	r.Handle("/docs/*", http.StripPrefix("/docs", swaggerHandler))
+
+	// Admin stats (protected)
+	statsH := &statsHandler{db: db}
+	r.Group(func(r chi.Router) {
+		r.Use(auth.Middleware(authUc))
+		r.Get("/api/admin/stats", statsH.Stats)
+	})
+
 	server := httpserver.NewServer(cfg, r)
-	log.Printf("Server running on port %s", cfg.Server.Port)
 	if err := server.Run(); err != nil {
 		log.Fatal(err)
 	}

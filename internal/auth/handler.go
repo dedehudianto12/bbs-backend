@@ -8,11 +8,12 @@ import (
 )
 
 type Handler struct {
-	usecase *Usecase
+	usecase      *Usecase
+	secureCookie bool
 }
 
-func NewHandler(usecase *Usecase) *Handler {
-	return &Handler{usecase: usecase}
+func NewHandler(usecase *Usecase, secureCookie bool) *Handler {
+	return &Handler{usecase: usecase, secureCookie: secureCookie}
 }
 
 type loginRequest struct {
@@ -43,7 +44,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false, // true di production
+		Secure:   h.secureCookie,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400,
 	})
@@ -61,11 +62,17 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   h.secureCookie,
+		SameSite: http.SameSiteLaxMode,
 	})
 	httphelper.Success(w, http.StatusOK, nil)
 }
 
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
-	admin := r.Context().Value(adminCtxKey).(*Admin)
+	admin, ok := r.Context().Value(adminCtxKey).(*Admin)
+	if !ok || admin == nil {
+		httphelper.Error(w, http.StatusUnauthorized, ErrInvalidToken)
+		return
+	}
 	httphelper.Success(w, http.StatusOK, admin)
 }

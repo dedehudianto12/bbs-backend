@@ -14,7 +14,8 @@ type AppConfig struct{
 }
 
 type ServerConfig struct{
-	Port string
+	Port        string
+	CORSOrigins []string
 }
 
 type DatabaseConfig struct{

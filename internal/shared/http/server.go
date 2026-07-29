@@ -2,7 +2,7 @@ package http
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -40,26 +40,27 @@ func (s *Server) Run() error {
 
 	go func() {
 		<-quit
-		log.Println("Shutting down server...")
+		slog.Info("shutting down server")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := s.srv.Shutdown(ctx); err != nil {
-			log.Printf("Server forced to shutdown: %v", err)
+			slog.Error("server forced to shutdown", "err", err)
 		}
 	}()
 
-	log.Printf("Server running on port %s", s.cfg.Server.Port)
+	slog.Info("server starting", "port", s.cfg.Server.Port)
 	if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return err
 	}
-	log.Println("Server stopped")
+	slog.Info("server stopped")
 	return nil
 }
 
-func NewRouter() chi.Router {
+func NewRouter(corsOrigins []string) chi.Router {
 	r := chi.NewRouter()
+	r.Use(SecurityHeaders)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://127.0.0.1:3000"},
+		AllowedOrigins:   corsOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,

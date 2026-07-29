@@ -3,7 +3,7 @@ package cloudinary
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	httphelper "github.com/dedehudianto12/bbs-backend/internal/shared/http"
@@ -48,7 +48,7 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	url, err := h.svc.Upload(r.Context(), file, folder)
 	if err != nil {
-		log.Printf("ERROR cloudinary upload: %v", err)
+		slog.Error("cloudinary upload", "err", err)
 		httphelper.Error(w, http.StatusInternalServerError, 
 			fmt.Errorf("gagal upload ke server. Pastikan konfigurasi Cloudinary sudah benar"))
 		return

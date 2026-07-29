@@ -1,7 +1,8 @@
 package industry
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -71,10 +72,11 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		defer file.Close()
 		url, err := h.cld.Upload(r.Context(), file, "industries")
 		if err != nil {
-			log.Printf("WARNING: cloudinary upload failed (industry created without image): %v", err)
-		} else {
-			ind.Image = &url
+			slog.Error("cloudinary upload", "err", err)
+			httphelper.Error(w, http.StatusInternalServerError, fmt.Errorf("gagal upload gambar: %w", err))
+			return
 		}
+		ind.Image = &url
 	}
 
 	if err := h.usecase.Create(r.Context(), ind); err != nil {
@@ -112,10 +114,11 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		defer file.Close()
 		url, err := h.cld.Upload(r.Context(), file, "industries")
 		if err != nil {
-			log.Printf("WARNING: cloudinary upload failed (industry updated without image): %v", err)
-		} else {
-			ind.Image = &url
+			slog.Error("cloudinary upload", "err", err)
+			httphelper.Error(w, http.StatusInternalServerError, fmt.Errorf("gagal upload gambar: %w", err))
+			return
 		}
+		ind.Image = &url
 	}
 
 	updated, err := h.usecase.Update(r.Context(), chi.URLParam(r, "id"), ind)

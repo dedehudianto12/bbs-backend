@@ -2,7 +2,8 @@ package product
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -49,14 +50,12 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	log.Println("CREATE product handler called")
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		log.Printf("ERROR parse multipart: %v", err)
+		slog.Error("parse multipart", "err", err)
 		httphelper.Error(w, http.StatusBadRequest, err)
 		return
 	}
-	log.Println("CREATE multipart parsed OK")
 
 	p := &Product{
 		Name:        r.FormValue("name"),
@@ -76,14 +75,15 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		defer file.Close()
 		url, err := h.cld.Upload(r.Context(), file, "products")
 		if err != nil {
-			log.Printf("WARNING: cloudinary upload failed (product created without image): %v", err)
-		} else {
-			p.Image = &url
+			slog.Error("cloudinary upload", "err", err)
+			httphelper.Error(w, http.StatusInternalServerError, fmt.Errorf("gagal upload gambar: %w", err))
+			return
 		}
+		p.Image = &url
 	}
 
 	if err := h.usecase.Create(r.Context(), p); err != nil {
-		log.Printf("ERROR creating product: %v", err)
+		slog.Error("create product", "err", err)
 		code := http.StatusInternalServerError
 		if err == ErrNameRequired {
 			code = http.StatusBadRequest
@@ -119,10 +119,11 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		defer file.Close()
 		url, err := h.cld.Upload(r.Context(), file, "products")
 		if err != nil {
-			log.Printf("WARNING: cloudinary upload failed (product updated without image): %v", err)
-		} else {
-			p.Image = &url
+			slog.Error("cloudinary upload", "err", err)
+			httphelper.Error(w, http.StatusInternalServerError, fmt.Errorf("gagal upload gambar: %w", err))
+			return
 		}
+		p.Image = &url
 	}
 
 	updated, err := h.usecase.Update(r.Context(), chi.URLParam(r, "id"), p)

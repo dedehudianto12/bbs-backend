@@ -1,10 +1,11 @@
 package main
 
 import (
-	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/dedehudianto12/bbs-backend/config"
 	"github.com/dedehudianto12/bbs-backend/internal/article"
@@ -28,7 +29,7 @@ type statsHandler struct {
 }
 
 func (h *statsHandler) Stats(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
+	ctx := r.Context()
 	stats := make(map[string]int)
 
 	var count int
@@ -51,32 +52,42 @@ func (h *statsHandler) Stats(w http.ResponseWriter, r *http.Request) {
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("config load", "err", err)
+		os.Exit(1)
 	}
 
 	db, err := database.New(cfg)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("database connect", "err", err)
+		os.Exit(1)
 	}
 	defer db.Close()
-	log.Println("Database connected")
+	slog.Info("database connected")
 
-	r := httpserver.NewRouter()
+	r := httpserver.NewRouter(cfg.Server.CORSOrigins)
 
 	// Auth module
 	authRepo := auth.NewRepository(db)
 	authUc := auth.NewUsecase(authRepo, cfg.JWT.Secret)
-	authH := auth.NewHandler(authUc)
-	auth.Routes(r, authH) // login & logout: no auth
+	authH := auth.NewHandler(authUc, cfg.App.Env == "production")
+	auth.Routes(r, authH) // logout: no auth
+
+	// Login with rate limiting: 5 req/min per IP
+	loginLimiter := httpserver.PerIPRateLimit(5, time.Minute)
+	r.Group(func(r chi.Router) {
+		r.Use(loginLimiter)
+		r.Post("/api/admin/login", authH.Login)
+	})
 
 	// Cloudinary
 	cldSvc, err := cloudinary.New(cfg.Cloudinary.CloudName, cfg.Cloudinary.APIKey, cfg.Cloudinary.APISecret)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("cloudinary init", "err", err)
+		os.Exit(1)
 	}
 
 	// Health
-	healthH := health.NewHandler()
+	healthH := health.NewHandler(db)
 	health.Routes(r, healthH)
 
 	// Public routes
@@ -127,6 +138,7 @@ func main() {
 
 	server := httpserver.NewServer(cfg, r)
 	if err := server.Run(); err != nil {
-		log.Fatal(err)
+		slog.Error("server run", "err", err)
+		os.Exit(1)
 	}
 }

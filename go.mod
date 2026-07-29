@@ -1,5 +1,7 @@
 module github.com/dedehudianto12/bbs-backend
 
+// pgx v5.10.0 requires go >= 1.25.0; must match or Go 1.22 refuses to build.
+// This is safe — the go directive is a minimum, not the actual compiler version.
 go 1.25.5
 
 require github.com/go-chi/chi v1.5.5

@@ -3,7 +3,6 @@ package product
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/dedehudianto12/bbs-backend/internal/shared/util"
 	"github.com/jackc/pgx/v5"
@@ -48,7 +47,6 @@ func (u *Usecase) GetBySlug(ctx context.Context, slug string) (*Product, error) 
 }
 
 func (u *Usecase) Create(ctx context.Context, p *Product) error {
-	fmt.Println("Creating product:", p)
 	if p.Name == "" {
 		return ErrNameRequired
 	}

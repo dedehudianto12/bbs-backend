@@ -142,7 +142,6 @@ func (r *pgxRepo) FindBySlug(ctx context.Context, slug string) (*Product, error)
 }
 
 func (r *pgxRepo) Create(ctx context.Context, p *Product) error {
-	fmt.Println("Creating product:", p)
 	return r.pool.QueryRow(ctx,
 		`INSERT INTO products (name, slug, "group", kategori, category, description, detail, image, specs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, created_at, updated_at`,
 		p.Name, p.Slug, p.Group, p.Kategori, p.Category, p.Description, p.Detail, p.Image, p.Specs,

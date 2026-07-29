@@ -22,10 +22,15 @@ func New(cloudName, apiKey, apiSecret string) (*Service, error) {
 
 // Upload uploads an image from reader to Cloudinary and returns the secure URL.
 // folder is optional (e.g. "articles", "gallery").
-func (s *Service) Upload(ctx context.Context, reader io.Reader, folder string) (string, error) {
-	resp, err := s.cld.Upload.Upload(ctx, reader, uploader.UploadParams{
-		Folder: folder,
-	})
+// publicID, if set, replaces the existing asset with that ID (idempotent overwrite).
+func (s *Service) Upload(ctx context.Context, reader io.Reader, folder string, publicID string) (string, error) {
+	params := uploader.UploadParams{Folder: folder}
+	if publicID != "" {
+		params.PublicID = publicID
+		overwrite := true
+		params.Overwrite = &overwrite // ponytail: one asset per entity, overwrite in place
+	}
+	resp, err := s.cld.Upload.Upload(ctx, reader, params)
 	if err != nil {
 		return "", err
 	}

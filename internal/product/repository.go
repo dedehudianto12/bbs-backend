@@ -56,6 +56,9 @@ func (r *pgxRepo) FindAll(ctx context.Context, group, kategori string) ([]Produc
 		}
 		products = append(products, p)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return products, nil
 }
 
@@ -113,6 +116,9 @@ func (r *pgxRepo) FindAllAdmin(ctx context.Context, group, kategori, search, sor
 			return nil, 0, err
 		}
 		products = append(products, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
 	}
 	return products, total, nil
 }

@@ -46,7 +46,7 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		folder = "general"
 	}
 
-	url, err := h.svc.Upload(r.Context(), file, folder)
+	url, err := h.svc.Upload(r.Context(), file, folder, "")
 	if err != nil {
 		slog.Error("cloudinary upload", "err", err)
 		httphelper.Error(w, http.StatusInternalServerError, 

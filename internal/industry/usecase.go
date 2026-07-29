@@ -66,7 +66,9 @@ func (u *Usecase) Update(ctx context.Context, id string, ind *Industry) (*Indust
 	if ind.Description != "" {
 		existing.Description = ind.Description
 	}
-	existing.Image = ind.Image // allow clearing
+	if ind.Image != nil {
+		existing.Image = ind.Image
+	}
 	if ind.ProductSlugs != nil {
 		existing.ProductSlugs = ind.ProductSlugs
 	}

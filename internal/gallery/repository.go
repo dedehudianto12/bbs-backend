@@ -41,6 +41,9 @@ func (r *pgxRepo) FindAll(ctx context.Context) ([]Gallery, error) {
 		}
 		galleries = append(galleries, g)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return galleries, nil
 }
 
@@ -84,6 +87,9 @@ func (r *pgxRepo) FindAllAdmin(ctx context.Context, search, sort string, page, l
 			return nil, 0, err
 		}
 		galleries = append(galleries, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
 	}
 	return galleries, total, nil
 }

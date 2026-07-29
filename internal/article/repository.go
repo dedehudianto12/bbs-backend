@@ -97,6 +97,9 @@ func (r *pgxRepo) FindAllAdmin(ctx context.Context, tag, search, sort string, pa
 		}
 		articles = append(articles, a)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
 	return articles, total, nil
 }
 

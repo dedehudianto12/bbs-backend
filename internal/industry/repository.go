@@ -44,6 +44,9 @@ func (r *pgxRepo) FindAll(ctx context.Context) ([]Industry, error) {
 		}
 		industries = append(industries, i)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	// ponytail: batch fetch product slugs instead of N+1 per-industry queries
 	slugMap, _ := r.batchGetProductSlugs(ctx, industryIDs(industries))
@@ -94,6 +97,9 @@ func (r *pgxRepo) FindAllAdmin(ctx context.Context, search, sort string, page, l
 			return nil, 0, err
 		}
 		industries = append(industries, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
 	}
 
 	// ponytail: batch fetch product slugs instead of N+1 per-industry queries
@@ -204,6 +210,9 @@ func (r *pgxRepo) getProductSlugs(ctx context.Context, industryID uuid.UUID) ([]
 			return nil, err
 		}
 		slugs = append(slugs, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return slugs, nil
 }

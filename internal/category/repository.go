@@ -45,6 +45,9 @@ func (r *pgxRepo) FindAll(ctx context.Context, group string) ([]Category, error)
 		}
 		cats = append(cats, c)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return cats, nil
 }
 

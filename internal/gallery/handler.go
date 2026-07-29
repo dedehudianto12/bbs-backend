@@ -65,7 +65,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	file, _, err := r.FormFile("file")
 	if err == nil {
 		defer file.Close()
-		url, err := h.cld.Upload(r.Context(), file, "galeri")
+		url, err := h.cld.Upload(r.Context(), file, "galeri", "")
 		if err != nil {
 			slog.Error("cloudinary upload", "err", err)
 			httphelper.Error(w, http.StatusInternalServerError, fmt.Errorf("gagal upload gambar: %w", err))
@@ -103,7 +103,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	file, _, err := r.FormFile("file")
 	if err == nil {
 		defer file.Close()
-		url, err := h.cld.Upload(r.Context(), file, "galeri")
+		url, err := h.cld.Upload(r.Context(), file, "galeri", chi.URLParam(r, "id"))
 		if err != nil {
 			slog.Error("cloudinary upload", "err", err)
 			httphelper.Error(w, http.StatusInternalServerError, fmt.Errorf("gagal upload gambar: %w", err))

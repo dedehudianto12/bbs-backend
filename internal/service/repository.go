@@ -42,6 +42,9 @@ func (r *pgxRepo) FindAll(ctx context.Context) ([]Service, error) {
 		}
 		services = append(services, s)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return services, nil
 }
 
@@ -85,6 +88,9 @@ func (r *pgxRepo) FindAllAdmin(ctx context.Context, search, sort string, page, l
 			return nil, 0, err
 		}
 		services = append(services, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
 	}
 	return services, total, nil
 }

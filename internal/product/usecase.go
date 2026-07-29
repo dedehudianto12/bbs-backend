@@ -73,9 +73,15 @@ func (u *Usecase) Update(ctx context.Context, id string, p *Product) (*Product, 
 	if p.Category != "" {
 		existing.Category = p.Category
 	}
-	existing.Description = p.Description
-	existing.Detail = p.Detail
-	existing.Image = p.Image
+	if p.Description != "" {
+		existing.Description = p.Description
+	}
+	if p.Detail != "" {
+		existing.Detail = p.Detail
+	}
+	if p.Image != nil {
+		existing.Image = p.Image
+	}
 	if p.Specs != nil {
 		existing.Specs = p.Specs
 	}

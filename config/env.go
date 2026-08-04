@@ -42,7 +42,13 @@ func Load() (*Config, error){
 		if err != nil {
 			return nil, err
 		}
-		sslMode = getEnvOrDefault("SSL_MODE", "disable")
+		// DB_SSLMODE is the documented name — it is what .env.example lists and
+		// what every .env for this project sets. The code read SSL_MODE, so the
+		// value operators actually set was silently ignored and this fell through
+		// to "disable", which against a cloud database means the connection is
+		// simply refused with nothing pointing at the cause. SSL_MODE is still
+		// honoured so an environment already configured that way keeps working.
+		sslMode = getEnvOrDefault("DB_SSLMODE", getEnvOrDefault("SSL_MODE", "disable"))
 	}
 
 	jwtSecret, err := getEnv("JWT_SECRET")
@@ -57,6 +63,12 @@ func Load() (*Config, error){
 	serverPort := getEnvOrDefault("PORT", getEnvOrDefault("SERVER_PORT", "8080"))
 
 	corsOrigins := parseCORSOrigins(getEnvOrDefault("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"))
+
+	// Relative by default: resolves to ./migrations from the repo root in
+	// development, and to /migrations in the container, where the binary runs
+	// from / and the Dockerfile copies the folder to the root.
+	migrationsPath := getEnvOrDefault("MIGRATIONS_PATH", "migrations")
+	migrationURL := getEnvOrDefault("MIGRATION_DATABASE_URL", "")
 
 	cloudinaryCloudName := getEnvOrDefault("CLOUDINARY_CLOUD_NAME", "")
 	cloudinaryAPIKey := getEnvOrDefault("CLOUDINARY_API_KEY", "")
@@ -78,6 +90,8 @@ func Load() (*Config, error){
 			Password: dbPassword,
 			Name: dbName,
 			SSLMode: sslMode,
+			MigrationsPath: migrationsPath,
+			MigrationURL: migrationURL,
 		},
 		JWT: JWTConfig{
 			Secret: jwtSecret,

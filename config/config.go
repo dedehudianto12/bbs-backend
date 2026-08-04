@@ -25,6 +25,16 @@ type DatabaseConfig struct{
 	Password 	string
 	Name 		string
 	SSLMode 	string
+
+	// MigrationsPath is where the .sql migration files live. Defaults to
+	// "migrations", which resolves correctly both from the repo root in
+	// development and from / in the container, where the Dockerfile copies them
+	// to /migrations.
+	MigrationsPath string
+	// MigrationURL, when set, is used verbatim for migrations instead of the
+	// application connection. Only needed for a provider whose direct endpoint
+	// is not derivable from the pooled one — see database.MigrationDSN.
+	MigrationURL string
 }
 
 type JWTConfig struct{

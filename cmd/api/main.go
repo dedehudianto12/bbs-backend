@@ -64,6 +64,16 @@ func main() {
 	defer db.Close()
 	slog.Info("database connected")
 
+	// Bring the schema up to what this binary expects, before the first request
+	// can arrive. Fatal on failure: serving traffic against a schema older than
+	// the code is how a deploy turns into an outage that reads like a query bug.
+	// Railway's health check sees the container fail to start and keeps the
+	// previous working deployment in place.
+	if err := database.Migrate(cfg); err != nil {
+		slog.Error("migrate", "err", err)
+		os.Exit(1)
+	}
+
 	r := httpserver.NewRouter(cfg.Server.CORSOrigins)
 
 	// Auth module

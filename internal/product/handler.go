@@ -28,7 +28,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	group := r.URL.Query().Get("group")
 	kategori := r.URL.Query().Get("kategori")
 	page, limit, search, sort := httphelper.ParsePagination(r)
-	products, total, err := h.usecase.ListAdmin(r.Context(), group, kategori, search, sort, page, limit)
+	sortBy := r.URL.Query().Get("sortBy")
+	if sortBy != "updated" {
+		sortBy = "created"
+	}
+	products, total, err := h.usecase.ListAdmin(r.Context(), group, kategori, search, sort, sortBy, page, limit)
 	if err != nil {
 		httphelper.Error(w, http.StatusInternalServerError, err)
 		return

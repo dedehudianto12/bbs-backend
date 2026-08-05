@@ -26,8 +26,8 @@ func (u *Usecase) List(ctx context.Context, group, kategori string) ([]Product, 
 	return u.repo.FindAll(ctx, group, kategori)
 }
 
-func (u *Usecase) ListAdmin(ctx context.Context, group, kategori, search, sort string, page, limit int) ([]Product, int, error) {
-	return u.repo.FindAllAdmin(ctx, group, kategori, search, sort, page, limit)
+func (u *Usecase) ListAdmin(ctx context.Context, group, kategori, search, sort, sortBy string, page, limit int) ([]Product, int, error) {
+	return u.repo.FindAllAdmin(ctx, group, kategori, search, sort, sortBy, page, limit)
 }
 
 func (u *Usecase) GetByID(ctx context.Context, id string) (*Product, error) {

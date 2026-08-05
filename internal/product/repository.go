@@ -9,7 +9,7 @@ import (
 
 type Repository interface {
 	FindAll(ctx context.Context, group, kategori string) ([]Product, error)
-	FindAllAdmin(ctx context.Context, group, kategori, search, sort string, page, limit int) ([]Product, int, error)
+	FindAllAdmin(ctx context.Context, group, kategori, search, sort, sortBy string, page, limit int) ([]Product, int, error)
 	FindByID(ctx context.Context, id string) (*Product, error)
 	FindBySlug(ctx context.Context, slug string) (*Product, error)
 	Create(ctx context.Context, p *Product) error
@@ -62,7 +62,7 @@ func (r *pgxRepo) FindAll(ctx context.Context, group, kategori string) ([]Produc
 	return products, nil
 }
 
-func (r *pgxRepo) FindAllAdmin(ctx context.Context, group, kategori, search, sort string, page, limit int) ([]Product, int, error) {
+func (r *pgxRepo) FindAllAdmin(ctx context.Context, group, kategori, search, sort, sortBy string, page, limit int) ([]Product, int, error) {
 	var total int
 	countQ := `SELECT count(*) FROM products WHERE 1=1`
 	dataQ := `SELECT id, slug, name, "group", kategori, category, description, detail, image, specs, created_at, updated_at FROM products WHERE 1=1`
@@ -100,7 +100,13 @@ func (r *pgxRepo) FindAllAdmin(ctx context.Context, group, kategori, search, sor
 	if sort == "asc" {
 		order = "ASC"
 	}
-	dataQ += fmt.Sprintf(` ORDER BY created_at %s LIMIT $%d OFFSET $%d`, order, idx, idx+1)
+	// The column is interpolated, never bound, so it must come from this
+	// whitelist — anything else falls back to created_at.
+	sortCol := "created_at"
+	if sortBy == "updated" {
+		sortCol = "updated_at"
+	}
+	dataQ += fmt.Sprintf(` ORDER BY %s %s LIMIT $%d OFFSET $%d`, sortCol, order, idx, idx+1)
 	args = append(args, limit, offset)
 
 	rows, err := r.pool.Query(ctx, dataQ, args...)
